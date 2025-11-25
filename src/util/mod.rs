@@ -24,8 +24,7 @@ pub fn pretty_name(id: &str) -> String {
 /// Normalizes a string for fuzzy matching and indexing.
 pub fn normalize(s: &str) -> String {
     s.to_ascii_lowercase()
-        .replace('_', " ")
-        .replace(':', " ")
+        .replace(['_', ':'], " ")
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
