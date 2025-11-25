@@ -348,14 +348,14 @@ fn draw_history_chart(frame: &mut Frame, area: Rect, app: &App) {
         Span::styled("● ", Style::default().fg(Color::Green)),
         Span::raw("Buy "),
         Span::styled(
-            format!("{}", last_buy.map(|v| format!("{:.1}", v)).unwrap_or("-".into())),
+            last_buy.map(|v| format!("{:.1}", v)).unwrap_or("-".into()).to_string(),
             Style::default().fg(Color::Green),
         ),
         Span::raw("   "),
         Span::styled("● ", Style::default().fg(Color::Red)),
         Span::raw("Sell "),
         Span::styled(
-            format!("{}", last_sell.map(|v| format!("{:.1}", v)).unwrap_or("-".into())),
+            last_sell.map(|v| format!("{:.1}", v)).unwrap_or("-".into()).to_string(),
             Style::default().fg(Color::Red),
         ),
         Span::raw("   "),
