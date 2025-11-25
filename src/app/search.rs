@@ -56,7 +56,7 @@ pub fn score_normalized(query_norm: &str, candidate_norm: &str) -> i32 {
 fn is_subsequence(needle: &str, hay: &str) -> bool {
     let mut it = hay.chars();
     for ch in needle.chars() {
-        if it.by_ref().find(|c| *c == ch).is_none() {
+        if !it.by_ref().any(|c| c == ch) {
             return false;
         }
     }
@@ -105,7 +105,7 @@ fn subsequence_positions(needle: &str, hay: &str) -> Option<Vec<usize>> {
     let mut last_idx = 0usize;
     for ch in needle.chars() {
         let mut found = None;
-        while let Some((i, c)) = hay_iter.next() {
+        for (i, c) in hay_iter.by_ref() {
             if c == ch {
                 found = Some(i);
                 last_idx = i;
