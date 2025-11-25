@@ -70,9 +70,9 @@ async fn run_loop(
 }
 
 async fn handle_event(app: &mut App) -> io::Result<bool> {
-    if event::poll(std::time::Duration::from_millis(16))? {
-        if let Event::Key(key) = event::read()? {
-            if key.kind == KeyEventKind::Press {
+    if event::poll(std::time::Duration::from_millis(16))?
+        && let Event::Key(key) = event::read()?
+            && key.kind == KeyEventKind::Press {
                 // Global quit
                 if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
                     return Ok(true);
@@ -83,8 +83,6 @@ async fn handle_event(app: &mut App) -> io::Result<bool> {
                     View::Detail => handle_detail_input(app, key),
                 });
             }
-        }
-    }
     Ok(false)
 }
 
