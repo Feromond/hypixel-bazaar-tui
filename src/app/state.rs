@@ -209,11 +209,10 @@ impl App {
     }
 
     fn get_spread(&self, index: usize) -> f64 {
-        if let Some(item) = self.data.index.get(index) {
-            if let Some(p) = self.data.products.get(&item.id) {
+        if let Some(item) = self.data.index.get(index)
+            && let Some(p) = self.data.products.get(&item.id) {
                 return p.quick_status.sell_price - p.quick_status.buy_price;
             }
-        }
         0.0
     }
 
@@ -295,13 +294,11 @@ impl App {
             loop {
                 tokio::select! {
                     _ = ticker.tick() => {
-                        if let Ok(response) = crate::api::client::fetch_bazaar().await {
-                             if let Some(p) = response.products.get(&pid_task) {
-                                 if let Some(out) = &outbound {
+                        if let Ok(response) = crate::api::client::fetch_bazaar().await
+                             && let Some(p) = response.products.get(&pid_task)
+                                 && let Some(out) = &outbound {
                                      let _ = out.send(p.clone());
                                  }
-                             }
-                        }
                     }
                     _ = &mut rx => {
                         break;
@@ -327,13 +324,11 @@ impl App {
             let id = id.clone();
             let outbound = self.update_tx.clone();
             tokio::spawn(async move {
-                 if let Ok(response) = crate::api::client::fetch_bazaar().await {
-                     if let Some(p) = response.products.get(&id) {
-                         if let Some(out) = &outbound {
+                 if let Ok(response) = crate::api::client::fetch_bazaar().await
+                     && let Some(p) = response.products.get(&id)
+                         && let Some(out) = &outbound {
                              let _ = out.send(p.clone());
                          }
-                     }
-                 }
             });
             self.status = "Refreshing...".into();
         }
