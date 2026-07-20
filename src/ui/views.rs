@@ -1,4 +1,5 @@
 use crate::app::state::{App, SearchMode};
+use hypixel::models::skyblock::{BazaarProduct, BazaarQuickStatus};
 use ratatui::{
     prelude::*,
     symbols,
@@ -44,7 +45,14 @@ pub fn draw_detail(frame: &mut Frame, app: &mut App) {
         .split(layout[1]);
 
     if let Some(p) = app.current_product() {
-        draw_quick_status(frame, &p.quick_status, middle[0]);
+        match p.quick_status.as_ref() {
+            Some(q) => draw_quick_status(frame, q, middle[0]),
+            None => frame.render_widget(
+                Paragraph::new("No quick status reported")
+                    .block(Block::default().title("Quick Status").borders(Borders::ALL)),
+                middle[0],
+            ),
+        }
         draw_orders(frame, p, middle[1]);
         draw_history_chart(frame, layout[2], app);
     } else {
@@ -85,9 +93,14 @@ fn draw_search_results(frame: &mut Frame, app: &mut App, area: Rect) {
         .iter()
         .map(|i| {
             let item = &app.data.index[*i];
-            if let Some(p) = app.data.products.get(&item.id) {
-                let buy = p.quick_status.buy_price;
-                let sell = p.quick_status.sell_price;
+            if let Some(q) = app
+                .data
+                .products
+                .get(&item.id)
+                .and_then(|p| p.quick_status.as_ref())
+            {
+                let buy = q.buy_price;
+                let sell = q.sell_price;
                 let spread = sell - buy;
                 let line = Line::from(vec![
                     Span::styled(
@@ -173,7 +186,7 @@ fn draw_detail_header(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(header, area);
 }
 
-fn draw_quick_status(frame: &mut Frame, q: &crate::api::models::QuickStatus, area: Rect) {
+fn draw_quick_status(frame: &mut Frame, q: &BazaarQuickStatus, area: Rect) {
     let buy_cell = colored_price(q.buy_price, Color::Green);
     let sell_cell = colored_price(q.sell_price, Color::Red);
     let spread = (q.sell_price - q.buy_price).max(0.0);
@@ -201,7 +214,7 @@ fn draw_quick_status(frame: &mut Frame, q: &crate::api::models::QuickStatus, are
     frame.render_widget(table, area);
 }
 
-fn draw_orders(frame: &mut Frame, p: &crate::api::models::Product, area: Rect) {
+fn draw_orders(frame: &mut Frame, p: &BazaarProduct, area: Rect) {
     // Orders (top 5 buy/sell)
     let buys = p.buy_summary.iter().take(5).map(|o| {
         Row::new(vec![

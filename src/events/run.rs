@@ -11,7 +11,7 @@ use tokio::time::{self, Duration};
 use tokio::sync::mpsc;
 
 use crate::app::state::{App, View, SearchMode};
-use crate::api::models::Product;
+use hypixel::models::skyblock::BazaarProduct;
 use crate::ui::views::{draw_detail, draw_search};
 
 pub async fn run_app(app: &mut App) -> io::Result<()> {
@@ -40,7 +40,7 @@ pub async fn run_app(app: &mut App) -> io::Result<()> {
 async fn run_loop(
     app: &mut App,
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
-    mut rx: mpsc::UnboundedReceiver<Product>,
+    mut rx: mpsc::UnboundedReceiver<BazaarProduct>,
 ) -> io::Result<()> {
     let mut tick = time::interval(Duration::from_millis(60));
     let debounce = Duration::from_millis(120);

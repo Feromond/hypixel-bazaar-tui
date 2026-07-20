@@ -1,6 +1,7 @@
-use crate::api::models::{BazaarResponse, Product};
 use crate::app::search::score_normalized;
 use crate::util::{normalize, pretty_name};
+use hypixel::HypixelClient;
+use hypixel::models::skyblock::{Bazaar, BazaarProduct};
 use indexmap::IndexMap;
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
@@ -30,9 +31,20 @@ pub struct ProductIndexItem {
 
 #[derive(Debug)]
 pub struct BazaarData {
-    pub products: IndexMap<String, Product>,
+    pub products: IndexMap<String, BazaarProduct>,
     pub last_updated: i64,
     pub index: Vec<ProductIndexItem>,
+}
+
+/// The buy/sell prices from a product's quick status, if the API reported one.
+///
+/// `BazaarProduct::quick_status` is optional in the SDK, so every read goes
+/// through here rather than unwrapping at each call site.
+pub fn quick_prices(product: &BazaarProduct) -> Option<(f64, f64)> {
+    product
+        .quick_status
+        .as_ref()
+        .map(|q| (q.buy_price, q.sell_price))
 }
 
 #[derive(Debug)]
@@ -66,13 +78,14 @@ pub struct App {
     pub data: BazaarData,
     pub search: SearchState,
     pub detail: DetailState,
-    pub update_tx: Option<mpsc::UnboundedSender<Product>>,
+    pub update_tx: Option<mpsc::UnboundedSender<BazaarProduct>>,
+    client: HypixelClient,
 }
 
 impl App {
-    pub fn new(response: BazaarResponse) -> Self {
+    pub fn new(client: HypixelClient, bazaar: Bazaar) -> Self {
         let mut products = IndexMap::new();
-        for (k, v) in response.products {
+        for (k, v) in bazaar.products {
             products.insert(k, v);
         }
 
@@ -95,7 +108,7 @@ impl App {
             status: "Loaded".into(),
             data: BazaarData {
                 products,
-                last_updated: response.last_updated,
+                last_updated: bazaar.last_updated,
                 index,
             },
             search: SearchState {
@@ -117,14 +130,15 @@ impl App {
                 cancel_tx: None,
             },
             update_tx: None,
+            client,
         }
     }
 
-    pub fn set_update_sender(&mut self, tx: mpsc::UnboundedSender<Product>) {
+    pub fn set_update_sender(&mut self, tx: mpsc::UnboundedSender<BazaarProduct>) {
         self.update_tx = Some(tx);
     }
 
-    pub fn current_product(&self) -> Option<&Product> {
+    pub fn current_product(&self) -> Option<&BazaarProduct> {
         self.detail.product_id.as_ref().and_then(|id| self.data.products.get(id))
     }
 
@@ -209,12 +223,12 @@ impl App {
     }
 
     fn get_spread(&self, index: usize) -> f64 {
-        if let Some(item) = self.data.index.get(index) {
-            if let Some(p) = self.data.products.get(&item.id) {
-                return p.quick_status.sell_price - p.quick_status.buy_price;
-            }
-        }
-        0.0
+        self.data
+            .index
+            .get(index)
+            .and_then(|item| self.data.products.get(&item.id))
+            .and_then(quick_prices)
+            .map_or(0.0, |(buy, sell)| sell - buy)
     }
 
     pub fn move_selection(&mut self, delta: isize) {
@@ -246,8 +260,8 @@ impl App {
             let id = self.data.index[idx].id.clone();
             self.detail.product_id = Some(id.clone());
             self.detail.history.clear();
-            if let Some(p) = self.data.products.get(&id) {
-                self.push_history(p.quick_status.buy_price, p.quick_status.sell_price);
+            if let Some((buy, sell)) = self.data.products.get(&id).and_then(quick_prices) {
+                self.push_history(buy, sell);
             }
             self.view = View::Detail;
             
@@ -263,15 +277,17 @@ impl App {
         self.detail.history.clear();
     }
 
-    pub fn update_product(&mut self, p: Product) {
+    pub fn update_product(&mut self, p: BazaarProduct) {
         let id = p.product_id.clone();
-        // Only update if this is the currently selected product or we just want to update cache
-        self.data.products.insert(id.clone(), p.clone());
-        
+
         if self.detail.product_id.as_deref() == Some(&id) {
-             self.push_history(p.quick_status.buy_price, p.quick_status.sell_price);
-             self.status = "Updated".into();
+            if let Some((buy, sell)) = quick_prices(&p) {
+                self.push_history(buy, sell);
+            }
+            self.status = "Updated".into();
         }
+
+        self.data.products.insert(id, p);
     }
 
     fn push_history(&mut self, buy: f64, sell: f64) {
@@ -288,6 +304,7 @@ impl App {
         let (tx, mut rx) = oneshot::channel::<()>();
         self.detail.cancel_tx = Some(tx);
         let outbound = self.update_tx.clone();
+        let client = self.client.clone();
         let pid_task = product_id.clone();
 
         let handle = tokio::spawn(async move {
@@ -295,12 +312,11 @@ impl App {
             loop {
                 tokio::select! {
                     _ = ticker.tick() => {
-                        if let Ok(response) = crate::api::client::fetch_bazaar().await {
-                             if let Some(p) = response.products.get(&pid_task) {
-                                 if let Some(out) = &outbound {
-                                     let _ = out.send(p.clone());
-                                 }
-                             }
+                        if let Ok(bazaar) = client.skyblock_bazaar().await
+                            && let Some(p) = bazaar.products.get(&pid_task)
+                            && let Some(out) = &outbound
+                        {
+                            let _ = out.send(p.clone());
                         }
                     }
                     _ = &mut rx => {
@@ -326,14 +342,14 @@ impl App {
         if let Some(id) = &self.detail.product_id {
             let id = id.clone();
             let outbound = self.update_tx.clone();
+            let client = self.client.clone();
             tokio::spawn(async move {
-                 if let Ok(response) = crate::api::client::fetch_bazaar().await {
-                     if let Some(p) = response.products.get(&id) {
-                         if let Some(out) = &outbound {
-                             let _ = out.send(p.clone());
-                         }
-                     }
-                 }
+                if let Ok(bazaar) = client.skyblock_bazaar().await
+                    && let Some(p) = bazaar.products.get(&id)
+                    && let Some(out) = &outbound
+                {
+                    let _ = out.send(p.clone());
+                }
             });
             self.status = "Refreshing...".into();
         }

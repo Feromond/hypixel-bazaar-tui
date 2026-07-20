@@ -1,16 +1,14 @@
 [package]
 name = "hypixel-bazaar-tui"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 [dependencies]
 crossterm = "0.29.0"
-indexmap = "2.12.1"
-ratatui = "0.29.0"
-reqwest = "0.12.24"
-serde = "1.0.228"
-serde_json = "1.0.145"
-tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "time"] }
+hypixel-sdk = "0.2.1"
+indexmap = "2.14.0"
+ratatui = "0.30.2"
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "time", "sync"] }
 
 [build-dependencies]
-winres = "0.1"
+winres = "0.1.12"
