@@ -9,7 +9,7 @@ readme = "README.md"
 repository = "https://github.com/Feromond/hypixel-bazaar-tui"
 homepage = "https://github.com/Feromond/hypixel-bazaar-tui"
 keywords = ["tui", "api", "rust", "fuzzy-search", "hypixel"]
-categories = ["command-line-utilities", "gaming"]
+categories = ["command-line-utilities", "games"]
 
 [dependencies]
 crossterm = "0.29.0"
