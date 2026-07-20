@@ -2,8 +2,9 @@ use crate::app::search::score_normalized;
 use crate::util::{normalize, pretty_name};
 use hypixel::HypixelClient;
 use hypixel::models::skyblock::{Bazaar, BazaarProduct};
+use hypixel::util::market::{self, BazaarFlip};
 use indexmap::IndexMap;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
 use tokio::{
     sync::{mpsc, oneshot},
@@ -29,22 +30,58 @@ pub struct ProductIndexItem {
     pub norm_display: String,
 }
 
+/// Weekly movement needed on both sides before a spread is worth ranking;
+/// without it the list is topped by unfillable one-sided books.
+pub const MIN_WEEKLY_VOLUME: i64 = 1_000;
+
 #[derive(Debug)]
 pub struct BazaarData {
     pub products: IndexMap<String, BazaarProduct>,
     pub last_updated: i64,
     pub index: Vec<ProductIndexItem>,
+    /// Viable flips only; absent means illiquid or unprofitable after tax.
+    pub flips: HashMap<String, BazaarFlip>,
 }
 
-/// The buy/sell prices from a product's quick status, if the API reported one.
+/// What a player can transact at right now.
 ///
-/// `BazaarProduct::quick_status` is optional in the SDK, so every read goes
-/// through here rather than unwrapping at each call site.
-pub fn quick_prices(product: &BazaarProduct) -> Option<(f64, f64)> {
-    product
-        .quick_status
-        .as_ref()
-        .map(|q| (q.buy_price, q.sell_price))
+/// `buy_summary` is the ask side and `sell_summary` the bid side, despite the
+/// names. Ask exceeds bid at depth 1, but the depth-weighted `quick_status` can
+/// invert on a thin book, so [`Prices::spread`] may legitimately be negative.
+#[derive(Debug, Clone, Copy)]
+pub struct Prices {
+    pub instant_buy: f64,
+    pub instant_sell: f64,
+}
+
+impl Prices {
+    pub fn spread(&self) -> f64 {
+        self.instant_buy - self.instant_sell
+    }
+
+    /// Spread relative to what you receive, so cheap items compare fairly.
+    pub fn spread_pct(&self) -> f64 {
+        if self.instant_sell.abs() > f64::EPSILON {
+            self.spread() / self.instant_sell * 100.0
+        } else {
+            0.0
+        }
+    }
+}
+
+/// Prefers `quick_status` (depth-weighted, less jumpy), falling back to the book.
+pub fn prices(product: &BazaarProduct) -> Option<Prices> {
+    if let Some(q) = product.quick_status.as_ref() {
+        return Some(Prices {
+            instant_buy: q.buy_price,
+            instant_sell: q.sell_price,
+        });
+    }
+    let spread = market::bazaar_spread(product)?;
+    Some(Prices {
+        instant_buy: spread.instant_buy_price,
+        instant_sell: spread.instant_sell_price,
+    })
 }
 
 #[derive(Debug)]
@@ -55,7 +92,7 @@ pub struct SearchState {
     pub selected_index: usize,
     pub needs_filter: bool,
     pub last_input_change: Instant,
-    pub sort_by_spread: bool,
+    pub sort_by_profit: bool,
 }
 
 #[derive(Debug)]
@@ -66,7 +103,6 @@ pub struct DetailState {
     pub show_sma: bool,
     pub show_midline: bool,
     
-    // Background refresh
     refresh_task: Option<JoinHandle<()>>,
     cancel_tx: Option<oneshot::Sender<()>>,
 }
@@ -84,6 +120,11 @@ pub struct App {
 
 impl App {
     pub fn new(client: HypixelClient, bazaar: Bazaar) -> Self {
+        let flips: HashMap<String, BazaarFlip> = market::bazaar_flips(&bazaar, MIN_WEEKLY_VOLUME)
+            .into_iter()
+            .map(|f| (f.product_id.clone(), f))
+            .collect();
+
         let mut products = IndexMap::new();
         for (k, v) in bazaar.products {
             products.insert(k, v);
@@ -110,6 +151,7 @@ impl App {
                 products,
                 last_updated: bazaar.last_updated,
                 index,
+                flips,
             },
             search: SearchState {
                 input: String::new(),
@@ -118,7 +160,7 @@ impl App {
                 selected_index: 0,
                 needs_filter: true,
                 last_input_change: Instant::now(),
-                sort_by_spread: false,
+                sort_by_profit: false,
             },
             detail: DetailState {
                 product_id: None,
@@ -141,8 +183,6 @@ impl App {
     pub fn current_product(&self) -> Option<&BazaarProduct> {
         self.detail.product_id.as_ref().and_then(|id| self.data.products.get(id))
     }
-
-    // --- Search Logic ---
 
     pub fn on_input(&mut self, ch: char) {
         self.search.input.push(ch);
@@ -187,16 +227,14 @@ impl App {
                 .filter(|(_, score)| *score > crate::app::search::MIN_SCORE)
                 .collect();
 
-            // Sort by score desc, then index asc
             scored.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
             self.search.filtered_indices = scored.into_iter().map(|(i, _)| i).collect();
         }
 
-        if self.search.sort_by_spread {
-            self.sort_filtered_by_spread();
+        if self.search.sort_by_profit {
+            self.sort_filtered_by_profit();
         }
 
-        // Clamp selection
         let count = self.search.filtered_indices.len();
         if count == 0 {
             self.search.selected_index = 0;
@@ -205,30 +243,32 @@ impl App {
         }
     }
 
-    fn sort_filtered_by_spread(&mut self) {
-        let spreads: std::collections::HashMap<usize, f64> = self
+    fn sort_filtered_by_profit(&mut self) {
+        let profits: HashMap<usize, f64> = self
             .search
             .filtered_indices
             .iter()
-            .map(|&idx| (idx, self.get_spread(idx)))
+            .map(|&idx| (idx, self.flip_profit(idx)))
             .collect();
 
-        self.search.filtered_indices.sort_by(|&a_idx, &b_idx| {
-            let spread_a = spreads.get(&a_idx).unwrap_or(&0.0);
-            let spread_b = spreads.get(&b_idx).unwrap_or(&0.0);
-            spread_b
-                .partial_cmp(spread_a)
-                .unwrap_or(std::cmp::Ordering::Equal)
+        self.search.filtered_indices.sort_by(|a_idx, b_idx| {
+            let a = profits.get(a_idx).copied().unwrap_or(0.0);
+            let b = profits.get(b_idx).copied().unwrap_or(0.0);
+            b.partial_cmp(&a).unwrap_or(std::cmp::Ordering::Equal)
         });
     }
 
-    fn get_spread(&self, index: usize) -> f64 {
+    /// Post-tax profit per item; rejected products score zero and sink.
+    fn flip_profit(&self, index: usize) -> f64 {
         self.data
             .index
             .get(index)
-            .and_then(|item| self.data.products.get(&item.id))
-            .and_then(quick_prices)
-            .map_or(0.0, |(buy, sell)| sell - buy)
+            .and_then(|item| self.data.flips.get(&item.id))
+            .map_or(0.0, |f| f.profit_per_item)
+    }
+
+    pub fn flip(&self, product_id: &str) -> Option<&BazaarFlip> {
+        self.data.flips.get(product_id)
     }
 
     pub fn move_selection(&mut self, delta: isize) {
@@ -253,19 +293,16 @@ impl App {
         }
     }
 
-    // --- Detail Logic ---
-
     pub fn enter_detail(&mut self) {
         if let Some(&idx) = self.search.filtered_indices.get(self.search.selected_index) {
             let id = self.data.index[idx].id.clone();
             self.detail.product_id = Some(id.clone());
             self.detail.history.clear();
-            if let Some((buy, sell)) = self.data.products.get(&id).and_then(quick_prices) {
-                self.push_history(buy, sell);
+            if let Some(p) = self.data.products.get(&id).and_then(prices) {
+                self.push_history(p.instant_buy, p.instant_sell);
             }
             self.view = View::Detail;
             
-            // Start refreshing
             self.start_refresh(id);
         }
     }
@@ -281,8 +318,8 @@ impl App {
         let id = p.product_id.clone();
 
         if self.detail.product_id.as_deref() == Some(&id) {
-            if let Some((buy, sell)) = quick_prices(&p) {
-                self.push_history(buy, sell);
+            if let Some(px) = prices(&p) {
+                self.push_history(px.instant_buy, px.instant_sell);
             }
             self.status = "Updated".into();
         }
@@ -353,5 +390,106 @@ impl App {
             });
             self.status = "Refreshing...".into();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hypixel::models::skyblock::{BazaarOrder, BazaarQuickStatus};
+
+    fn order(price: f64) -> BazaarOrder {
+        BazaarOrder {
+            amount: 1,
+            price_per_unit: price,
+            orders: 1,
+        }
+    }
+
+    /// One-level book: asks in `buy_summary`, bids in `sell_summary`.
+    fn product(ask: f64, bid: f64) -> BazaarProduct {
+        BazaarProduct {
+            product_id: "ENCHANTED_DIAMOND".into(),
+            buy_summary: vec![order(ask)],
+            sell_summary: vec![order(bid)],
+            quick_status: None,
+        }
+    }
+
+    fn with_quick_status(mut p: BazaarProduct, buy_price: f64, sell_price: f64) -> BazaarProduct {
+        p.quick_status = Some(BazaarQuickStatus {
+            product_id: p.product_id.clone(),
+            buy_price,
+            sell_price,
+            buy_volume: 0,
+            sell_volume: 0,
+            buy_moving_week: 0,
+            sell_moving_week: 0,
+            buy_orders: 0,
+            sell_orders: 0,
+            extra: Default::default(),
+        });
+        p
+    }
+
+    #[test]
+    fn quick_status_maps_buy_to_instant_buy() {
+        let p = with_quick_status(product(1355.20, 1257.90), 1379.05, 1257.31);
+        let px = prices(&p).expect("quick status present");
+
+        assert_eq!(px.instant_buy, 1379.05);
+        assert_eq!(px.instant_sell, 1257.31);
+    }
+
+    /// Guards the sign bug: a spread read off the book must be positive.
+    #[test]
+    fn fallback_uses_top_of_book_with_correct_orientation() {
+        let px = prices(&product(1355.20, 1257.90)).expect("both sides populated");
+
+        assert_eq!(px.instant_buy, 1355.20, "instant buy is the lowest ask");
+        assert_eq!(px.instant_sell, 1257.90, "instant sell is the highest bid");
+        assert!(px.spread() > 0.0, "ask sits above bid, so spread is positive");
+        assert!((px.spread() - 97.30).abs() < 1e-9);
+    }
+
+    #[test]
+    fn spread_is_relative_to_what_you_receive() {
+        let px = prices(&product(200.0, 100.0)).unwrap();
+
+        assert_eq!(px.spread(), 100.0);
+        assert_eq!(px.spread_pct(), 100.0);
+    }
+
+    #[test]
+    fn quick_status_takes_precedence_over_the_book() {
+        let p = with_quick_status(product(999.0, 1.0), 1379.05, 1257.31);
+        let px = prices(&p).unwrap();
+
+        assert_eq!(px.instant_buy, 1379.05);
+    }
+
+    #[test]
+    fn a_one_sided_book_has_no_prices() {
+        let mut p = product(1355.20, 1257.90);
+        p.sell_summary.clear();
+
+        assert!(prices(&p).is_none());
+    }
+
+    #[test]
+    fn zero_bid_does_not_blow_up_the_percentage() {
+        let px = prices(&product(10.0, 0.0)).unwrap();
+
+        assert_eq!(px.spread(), 10.0);
+        assert_eq!(px.spread_pct(), 0.0);
+    }
+
+    /// A depth-weighted inversion is real signal; it must not be clamped.
+    #[test]
+    fn an_inverted_quick_status_keeps_its_sign() {
+        let p = with_quick_status(product(100.0, 50.0), 10.0, 20.0);
+        let px = prices(&p).unwrap();
+
+        assert!(px.spread() < 0.0);
     }
 }

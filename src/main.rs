@@ -10,8 +10,7 @@ use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    // The bazaar endpoint is keyless. One client is shared by the initial load
-    // and every background refresh; clones reuse its connection pool.
+    // Keyless endpoint; clones share this client's connection pool.
     let client = HypixelClient::builder()
         .timeout(Duration::from_secs(10))
         .retry_on_rate_limit(2)

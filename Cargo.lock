@@ -742,7 +742,7 @@ dependencies = [
 
 [[package]]
 name = "hypixel-bazaar-tui"
-version = "0.2.0"
+version = "1.1.0"
 dependencies = [
  "crossterm",
  "hypixel-sdk",
@@ -754,9 +754,9 @@ dependencies = [
 
 [[package]]
 name = "hypixel-sdk"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b7e4926d0971b1286bb6dd63bc6d5324f55d48903e8767f4076e82b68af5524"
+checksum = "6649c30e07f3494a1c728bfe4f284b02d2a1331e7efd1d43dd5b2a376487c4fa"
 dependencies = [
  "base64",
  "chrono",

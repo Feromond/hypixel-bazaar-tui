@@ -133,9 +133,9 @@ fn handle_search_input(app: &mut App, key: event::KeyEvent) -> bool {
             KeyCode::Backspace => app.on_backspace(),
             KeyCode::Delete => app.on_delete(),
             KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                app.search.sort_by_spread = !app.search.sort_by_spread;
+                app.search.sort_by_profit = !app.search.sort_by_profit;
                 app.recompute_filter();
-                app.status = if app.search.sort_by_spread { "Sorted by spread".into() } else { "Sorted by relevance".into() };
+                app.status = if app.search.sort_by_profit { "Sorted by flip profit".into() } else { "Sorted by relevance".into() };
             }
             KeyCode::Char(ch) => app.on_input(ch),
             KeyCode::Enter => app.enter_detail(),
@@ -176,9 +176,9 @@ fn handle_search_input(app: &mut App, key: event::KeyEvent) -> bool {
                 app.on_delete();
             }
             KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                app.search.sort_by_spread = !app.search.sort_by_spread;
+                app.search.sort_by_profit = !app.search.sort_by_profit;
                 app.recompute_filter();
-                app.status = if app.search.sort_by_spread { "Sorted by spread".into() } else { "Sorted by relevance".into() };
+                app.status = if app.search.sort_by_profit { "Sorted by flip profit".into() } else { "Sorted by relevance".into() };
             }
             KeyCode::Char(ch) => {
                 app.search.mode = SearchMode::Insert;

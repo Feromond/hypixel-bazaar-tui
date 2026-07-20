@@ -1,11 +1,11 @@
 [package]
 name = "hypixel-bazaar-tui"
-version = "0.2.0"
+version = "1.1.0"
 edition = "2024"
 
 [dependencies]
 crossterm = "0.29.0"
-hypixel-sdk = "0.2.1"
+hypixel-sdk = "0.2.2"
 indexmap = "2.14.0"
 ratatui = "0.30.2"
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "time", "sync"] }
