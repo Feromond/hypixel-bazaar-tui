@@ -1,69 +1,68 @@
 # Hypixel Bazaar TUI
 
-A high-performance Terminal User Interface (TUI) for browsing the Hypixel Skyblock Bazaar, written in Rust.
+<p align="center">
+  <img width="256" height="256" alt="app icon" src="https://github.com/user-attachments/assets/0da9be5f-2f7a-4ca2-9c26-658f06566c71" />
+</p>
 
-This application allows you to monitor Bazaar prices, view product details, track price history with charts, and analyze buy/sell orders directly from your terminal.
+<p align="center">
+  <a href="https://crates.io/crates/hypixel-bazaar-tui"><img alt="crates.io" src="https://img.shields.io/crates/v/hypixel-bazaar-tui.svg" /></a>
+  <a href="https://crates.io/crates/hypixel-bazaar-tui"><img alt="downloads" src="https://img.shields.io/crates/d/hypixel-bazaar-tui.svg" /></a>
+  <a href="./LICENSE"><img alt="license" src="https://img.shields.io/crates/l/hypixel-bazaar-tui.svg" /></a>
+</p>
 
-<img width="256" height="256" alt="image" src="https://github.com/user-attachments/assets/0da9be5f-2f7a-4ca2-9c26-658f06566c71" />
-
-
-## Features
-
-- **Real-time Data**: Fetches live data from the Hypixel API.
-- **Search & Filtering**: Quickly find products by name.
-- **Detailed Analytics**:
-  - View Buy/Sell prices and Spread.
-  - Analyze market volume and moving averages.
-  - Top Buy/Sell orders list.
-- **Interactive Charts**: Visual price history with Simple Moving Averages (SMA).
-- **Keyboard Navigation**: Efficient controls for power users.
+A terminal UI for browsing the Hypixel Skyblock Bazaar. Search products, check buy/sell prices and spreads, and look at price history charts, all from the terminal.
 
 ## Screenshots
 
-<img width="2540" height="1408" alt="image" src="https://github.com/user-attachments/assets/488da9c2-b536-4bdb-a743-faad603b74ab" />
+<img width="2540" height="1408" alt="search view" src="https://github.com/user-attachments/assets/488da9c2-b536-4bdb-a743-faad603b74ab" />
 
-<br/>
+<img width="2542" height="1408" alt="detail view" src="https://github.com/user-attachments/assets/af9ff45e-9e29-4397-9e0a-e40f02259139" />
 
-<img width="2542" height="1408" alt="image" src="https://github.com/user-attachments/assets/af9ff45e-9e29-4397-9e0a-e40f02259139" />
+## Install
 
+```bash
+cargo install hypixel-bazaar-tui
+```
 
-## Installation
+Or build from source:
 
-### From Source
-
-Ensure you have [Rust and Cargo installed](https://rustup.rs/).
-
-1. Clone the repository:
-
-   ```bash
-   git clone https://github.com/Feromond/hypixel-bazaar-tui.git
-   cd hypixel-bazaar-tui
-   ```
-
-2. Build and run:
-   ```bash
-   cargo run --release
-   ```
+```bash
+git clone https://github.com/Feromond/hypixel-bazaar-tui.git
+cd hypixel-bazaar-tui
+cargo run --release
+```
 
 ## Usage
 
-- **Search**: Type to filter products.
-- **Navigation**: Use `Up`/`Down` arrows to select a product.
-- **Details**: Press `Enter` to view detailed stats and charts for the selected product.
-- **Back**: Press `Esc` to go back or quit.
-- **Sort**: `Ctrl+S` to toggle sorting modes (if implemented).
+Start typing to search for a product, then `Enter` to open it.
 
-## Tech Stack
+**Search view**
 
-- **Rust**: Core language.
-- **Ratatui**: TUI library for rendering.
-- **Tokio**: Asynchronous runtime.
-- **Reqwest**: HTTP client for API requests.
+| Key | Action |
+| --- | --- |
+| `Up` / `Down` | Move selection |
+| `Ctrl+Up` / `Ctrl+Down` | Jump to top / bottom |
+| `PageUp` / `PageDown` | Jump 20 rows |
+| `Ctrl+S` | Toggle sort (relevance / flip profit) |
+| `Enter` | Open product |
+| `Esc` | Clear search, or quit if empty |
 
-## Building for Windows
+**Product view**
 
-This project includes a build script to bundle an icon for Windows releases.
+| Key | Action |
+| --- | --- |
+| `p` | Toggle chart % / absolute mode |
+| `m` | Toggle SMA overlay |
+| `g` | Toggle midline |
+| `r` | Refresh |
+| `Esc` / `b` | Back to search |
 
-1. Place your `.ico` file in the `icons/` folder (e.g., `icons/hypixel-bazaar-tui.ico`).
-2. The `build.rs` script is configured to use `icons/hypixel-bazaar-tui.ico`.
-3. Run `cargo build --release`.
+`Ctrl+C` quits from anywhere.
+
+## Building on Windows
+
+The build script bundles `icons/hypixel-bazaar-tui.ico` into the binary. Swap that file out if you want a different icon, then `cargo build --release`.
+
+## License
+
+MIT
