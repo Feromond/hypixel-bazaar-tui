@@ -2,6 +2,14 @@
 name = "hypixel-bazaar-tui"
 version = "1.1.0"
 edition = "2024"
+authors = ["Jacob Mish <JacobPMish@gmail.com>"]
+description = "A TUI application to view the Hypixel Bazaar data. An upgraded version of my old CLI version"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/Feromond/hypixel-bazaar-tui"
+homepage = "https://github.com/Feromond/hypixel-bazaar-tui"
+keywords = ["tui", "api", "rust", "fuzzy-search", "hypixel"]
+categories = ["command-line-utilities", "gaming"]
 
 [dependencies]
 crossterm = "0.29.0"
@@ -12,3 +20,9 @@ tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "time", "
 
 [build-dependencies]
 winres = "0.1.12"
+
+[profile.release]
+strip = true
+opt-level = 3
+lto = true
+codegen-units = 1

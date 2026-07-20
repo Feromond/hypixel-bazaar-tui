@@ -90,6 +90,14 @@ fn draw_search_input(frame: &mut Frame, app: &App, area: Rect) {
 }
 
 fn draw_search_results(frame: &mut Frame, app: &mut App, area: Rect) {
+    // Fixed-width numeric columns + borders (2) + highlight symbol ("▸ ", 2).
+    const FIXED_COLS_WIDTH: u16 = 15 + 15 + 15 + 10 + 8 + 2 + 2;
+    const MIN_NAME_WIDTH: usize = 16;
+    let name_width = area
+        .width
+        .saturating_sub(FIXED_COLS_WIDTH)
+        .max(MIN_NAME_WIDTH as u16) as usize;
+
     let items: Vec<ListItem> = app
         .search.filtered_indices
         .iter()
@@ -109,7 +117,7 @@ fn draw_search_results(frame: &mut Frame, app: &mut App, area: Rect) {
 
                 let line = Line::from(vec![
                     Span::styled(
-                        format!("{:<28}", truncate(&item.display, 28)),
+                        format!("{:<name_width$}", truncate(&item.display, name_width)),
                         Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
                     ),
                     Span::styled(
@@ -172,7 +180,7 @@ fn draw_search_results(frame: &mut Frame, app: &mut App, area: Rect) {
                 .title_bottom(
                     Line::from(Span::styled(
                         format!(
-                            "{:<28}{:>15}{:>15}{:>15}{:>10}{:>8}",
+                            "{:<name_width$}{:>15}{:>15}{:>15}{:>10}{:>8}",
                             "", "buy", "sell", "profit", "margin", "vol/wk"
                         ),
                         Style::default().fg(Color::DarkGray),
