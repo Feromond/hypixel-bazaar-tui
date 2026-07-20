@@ -14,9 +14,11 @@ A terminal UI for browsing the Hypixel Skyblock Bazaar. Search products, check b
 
 ## Screenshots
 
-<img width="2540" height="1408" alt="search view" src="https://github.com/user-attachments/assets/488da9c2-b536-4bdb-a743-faad603b74ab" />
+<img width="997" height="737" alt="Screenshot 2026-07-20 at 12 37 41 PM" src="https://github.com/user-attachments/assets/ff3e0d1f-d419-4c63-8b13-0113d93b8e22" />
 
-<img width="2542" height="1408" alt="detail view" src="https://github.com/user-attachments/assets/af9ff45e-9e29-4397-9e0a-e40f02259139" />
+
+<img width="997" height="737" alt="Screenshot 2026-07-20 at 12 38 15 PM" src="https://github.com/user-attachments/assets/f69c9a98-db8c-4b17-b3d5-0037fb340e8c" />
+
 
 ## Install
 
